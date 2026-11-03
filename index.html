@@ -1354,6 +1354,16 @@ function jump(){
 let bannerTimer = 0;
 function banner(title, sub){ $('bannerTitle').textContent = title; $('bannerSub').textContent = sub; $('banner').classList.add('show'); bannerTimer = 2.4; }
 const PANELS = ['title', 'levels', 'over', 'win', 'shop'];
+// hooks for game sites (ads at natural breaks, gameplay start/stop); does nothing on our own website
+function platformGameplay(on){ try { if (window.PLATFORM && window.PLATFORM.gameplay) window.PLATFORM.gameplay(on); } catch(e){} }
+function showAfterBreak(id, still){
+  platformGameplay(false);
+  if (!window.PLATFORM || !window.PLATFORM.breakAd){ if (still()) show(id); return; }
+  let done = false;
+  const finish = () => { if (done) return; done = true; if (ac && !document.hidden) ac.resume(); if (still()) show(id); };
+  try { window.PLATFORM.breakAd({started(){ if (ac) ac.suspend(); }, done: finish}); } catch(e){ finish(); }
+  setTimeout(finish, 45000);
+}
 function show(id){
   for (const p of PANELS) $(p).hidden = p !== id;
   if (id === 'title' || id === 'levels' || id === 'shop'){ inBonus = -1; cfgOverride = null; }
@@ -1361,6 +1371,7 @@ function show(id){
   if (id && mode !== 'title' && (id === 'title' || id === 'levels' || id === 'shop')){
     mode = 'title'; level = Math.min(level, unlocked - 1); reset(); $('hud').hidden = true; stopMusic();
   }
+  if (id) platformGameplay(false);
   if (id === 'levels') buildLevels();
   if (id === 'shop') buildShop();
   if (id === 'title') refreshWallet();
@@ -1436,6 +1447,7 @@ function applyDev(){
 }
 if (devMode) applyDev();
 $('gameTitle').addEventListener('pointerdown', () => {
+  if (window.PLATFORM) return;
   devTaps++; clearTimeout(devTimer); devTimer = setTimeout(() => devTaps = 0, 1500);
   if (devTaps < 5) return;
   devTaps = 0; audio();
@@ -1468,6 +1480,7 @@ $('nextBtn').addEventListener('click', () => {
 function startLevel(n){
   inBonus = -1; cfgOverride = null; level = n; reset(); mode = 'play'; t = 0;
   show(null); $('hud').hidden = false;
+  platformGameplay(true);
   if (cfg.race) raceStart();
   if (cfg.mail) mailStart();
   if (cfg.mini === 'flip'){ initFlip(); for (const id of ['brakeBtn', 'treasureBtn', 'gapsLeft']) $(id).hidden = true; }
@@ -1506,7 +1519,7 @@ function crash(fell, kind){
       fish:'Fish slap!', beaver:'Beaver bonk!', stick:'Stuck in the sticks!', popcorn:'Popcorn everywhere!', bumper:'Bumped!', balloon:'Should have stayed down!', pie:'Pie in the face!', moonrock:'Moon rock!', probe:'Space junk!', zap:'Zapped!', asteroid:'Asteroid!', xtree:'Tangled in a Christmas tree!', cloud:'Lost in the snow clouds!', acacia:'Stuck in a treetop!', birds:'Flew into a flock!'}[kind] || 'Derailed!');
   $('overSub').textContent = `You made it ${Math.min(99, Math.floor(dist / cfg.len * 100))}% of the way through ${cfg.name}.`;
   $('fScore').textContent = score; $('fCoins').textContent = coinCount; $('fBest').textContent = b;
-  setTimeout(() => { if (mode === 'over') show('over'); }, 650);
+  setTimeout(() => showAfterBreak('over', () => mode === 'over'), 650);
 }
 
 function winLevel(){
@@ -1524,7 +1537,7 @@ function winLevel(){
   $('nextBtn').hidden = last;
   if (inBonus >= 0){ bonusWins['B' + (inBonus + 1)] = 1; store.set('bonusWins', bonusWins); $('winTitle').textContent = 'Bonus complete!'; }
   else { const bi = BONUS.findIndex(b => b.after === level); if (bi >= 0 && !bonusWins['B' + (bi + 1)]) $('winSub').textContent = `Bonus level unlocked: ${BONUS[bi].name}! Tap Next to play it.`; }
-  setTimeout(() => { if (mode === 'win') show('win'); }, 1700);
+  setTimeout(() => showAfterBreak('win', () => mode === 'win'), 1700);
 }
 
 /* ---------- level select & shop ---------- */
@@ -6162,7 +6175,7 @@ function raceLose(){
   $('overTitle').textContent = 'The Thunderbolt won!';
   $('overSub').textContent = `So close! You crossed ${Math.floor(dist/cfg.len*100)}% of the course. Hit the speed pads and dodge everything to win.`;
   $('fScore').textContent = score; $('fCoins').textContent = coinCount; $('fBest').textContent = b;
-  setTimeout(() => { if (mode === 'over') show('over'); }, 1100);
+  setTimeout(() => showAfterBreak('over', () => mode === 'over'), 1100);
 }
 function raceUpdate(dt, v){
   const r = rival; if (!r) return;
@@ -7039,7 +7052,7 @@ function flipFail(title){
   $('overTitle').textContent = title;
   $('overSub').textContent = `You made it ${Math.min(99, Math.floor(dist / cfg.len * 100))}% of the way through ${cfg.name}.`;
   $('fScore').textContent = score; $('fCoins').textContent = coinCount; $('fBest').textContent = b;
-  setTimeout(() => { if (mode === 'over' && fz) show('over'); }, 900);
+  setTimeout(() => showAfterBreak('over', () => mode === 'over' && !!fz), 900);
 }
 const FLIP_MSG = {cart: 'Crashed into a mine cart!', crystal: 'Crystal crunch!', rubble: 'Rock slide!', tnt: 'KABOOM!', stal: 'Stalactite!', hcrystal: 'Crystal crunch!', beam: 'Bonked by a beam!'};
 function updateFlip(dt){
@@ -7346,7 +7359,7 @@ function startSideBonus(i){
   cfgOverride = Object.assign({}, B.cfg, {name: B.name}); level = B.after; reset(); inBonus = i; bz = null;
   mode = 'play'; t = 0; ot = 0;
   show(null); $('hud').hidden = false; $('lvlLabel').textContent = `Bonus · ${B.name}`;
-  lightsStart(); sfx.whistle(); startMusic();
+  lightsStart(); sfx.whistle(); startMusic(); platformGameplay(true);
 }
 function startBonus(i){
   if (BONUS[i].side) return startSideBonus(i);
@@ -7358,6 +7371,7 @@ function startBonus(i){
   show(null); $('hud').hidden = false; for (const id of ['pwSteam', 'pwMagnet', 'lifeChip', 'brakeBtn', 'treasureBtn']) $(id).hidden = true;
   $('lvlLabel').textContent = `Bonus · ${B.name}`;
   sfx.whistle(); startMusic();
+  platformGameplay(true);
   banner(`Bonus: ${B.name}`, B.kind === 'cave' ? 'Drag to steer. Dodge everything that could pop your balloons!' : 'Drag to steer. Keep your bubble safe all the way up!');
 }
 function bWall(y){
@@ -7398,7 +7412,7 @@ function bonusFail(){
   $('overTitle').textContent = bz.kind === 'sea' ? 'Pop! The bubble burst!' : 'Pop! Out of balloons!';
   $('overSub').textContent = `You floated ${Math.min(99, Math.floor(bz.alt/bz.B.len*100))}% of the way up ${bz.B.name}.`;
   $('fScore').textContent = score; $('fCoins').textContent = coinCount; $('fBest').textContent = bests[k] || 0;
-  setTimeout(() => { if (mode === 'over' && inBonus >= 0) show('over'); }, 1100);
+  setTimeout(() => showAfterBreak('over', () => mode === 'over' && inBonus >= 0), 1100);
 }
 function bonusWin(){
   mode = 'win'; winT = 0; stopMusic(.6); sfx.win();
@@ -7412,7 +7426,7 @@ function bonusWin(){
   $('winSub').textContent = `You floated all the way up ${bz.B.name}! Next up: Level ${nx + 1}, ${LEVELS[nx].name}.`;
   $('wScore').textContent = score; $('wCoins').textContent = coinCount - prize; $('wBonus').textContent = '+' + prize;
   $('nextBtn').hidden = false;
-  setTimeout(() => { if (mode === 'win' && inBonus >= 0) show('win'); }, 1700);
+  setTimeout(() => showAfterBreak('win', () => mode === 'win' && inBonus >= 0), 1700);
 }
 function bPointer(e){ const r = cv.getBoundingClientRect(); return {x: (e.clientX - r.left)/S, y: (e.clientY - r.top)/S}; }
 addEventListener('pointermove', e => {
