@@ -1422,9 +1422,23 @@ addEventListener('pointerup', release); addEventListener('pointercancel', e => {
 addEventListener('touchstart', e => { touchHeld = true; if (performance.now() - lastPD < 400) return; const t = e.target; if (!(t.closest && t.closest('.panel.scroll, button, .panel'))) e.preventDefault(); press(e.changedTouches && e.changedTouches[0] ? Object.assign({target: t, clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY}) : e); }, {passive:false});
 addEventListener('touchend', e => { touchHeld = false; release(); }); addEventListener('touchcancel', e => { touchHeld = false; release(); });
 // last-resort fallback: if neither pointer nor touch events arrived, a mouse/click event still makes the train jump
-addEventListener('mousedown', e => { if (performance.now() - lastPress < 600) return; press(e); }, true);
-addEventListener('mouseup', e => { if (!touchHeld) release(); });
-addEventListener('click', e => { if (performance.now() - lastPress < 600) return; if (e.target.closest && e.target.closest('button, .panel')) return; press(e); setTimeout(release, 160); }, true);
+// Some iPad/iPhone embeds (itch.io) deliver no touch or pointer events at all, only a mousedown+click when the finger lifts.
+// Then a tap can't be "held", so each tap gives a full jump, or a short hop when a low bar or overhead spike is just ahead.
+let tapUntil = 0;
+function tapJump(e){
+  if (performance.now() - lastPress < 600) return;
+  if (e.target && e.target.closest && e.target.closest('button, .panel')) return;
+  press(e);
+  if (mode !== 'play') return;
+  const lead = obs.some(o => !o.dead && (o.t === 'lowbar' || o.under) && o.x - (TX + TW) > -TW && o.x - (TX + TW) < Math.max(260, curV*.5));
+  const hold = lead ? 40 : 260; tapUntil = performance.now() + hold + 50;
+  setTimeout(release, hold);
+}
+addEventListener('mousedown', tapJump, true);
+addEventListener('mouseup', e => { if (!touchHeld && performance.now() > tapUntil) release(); });
+addEventListener('click', tapJump, true);
+// iOS only sends mouse/click events for elements that look clickable
+cv.style.cursor = 'pointer'; cv.addEventListener('click', () => {}); $('wrap').addEventListener('click', () => {});
 window.__cr = {audio: () => audio(), ac: () => ac};
 const BKEYS = {ArrowLeft: ['x', -1], KeyA: ['x', -1], ArrowRight: ['x', 1], KeyD: ['x', 1], ArrowUp: ['y', -1], KeyW: ['y', -1], ArrowDown: ['y', 1], KeyS: ['y', 1]};
 addEventListener('keydown', e => {
