@@ -1379,8 +1379,11 @@ function show(id){
 document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => show(b.dataset.go)));
 
 /* ---------- input ---------- */
+let lastPress = 0;
 function press(e){
+  if (window.__crPress) try { window.__crPress(e, mode); } catch(err){}
   if (e && e.target && e.target.closest && e.target.closest('button, .panel')) return;
+  lastPress = performance.now();
   audio();
   if (mode !== 'play') return;
   if (inBonus >= 0 && bz){ bz.drag = bPointer(e); return; }
@@ -1418,6 +1421,11 @@ addEventListener('pointerup', release); addEventListener('pointercancel', e => {
 // fallback for embeds (e.g. iOS Safari inside an iframe) where pointer events don't arrive: use raw touches
 addEventListener('touchstart', e => { touchHeld = true; if (performance.now() - lastPD < 400) return; const t = e.target; if (!(t.closest && t.closest('.panel.scroll, button, .panel'))) e.preventDefault(); press(e.changedTouches && e.changedTouches[0] ? Object.assign({target: t, clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY}) : e); }, {passive:false});
 addEventListener('touchend', e => { touchHeld = false; release(); }); addEventListener('touchcancel', e => { touchHeld = false; release(); });
+// last-resort fallback: if neither pointer nor touch events arrived, a mouse/click event still makes the train jump
+addEventListener('mousedown', e => { if (performance.now() - lastPress < 600) return; press(e); }, true);
+addEventListener('mouseup', e => { if (!touchHeld) release(); });
+addEventListener('click', e => { if (performance.now() - lastPress < 600) return; if (e.target.closest && e.target.closest('button, .panel')) return; press(e); setTimeout(release, 160); }, true);
+window.__cr = {audio: () => audio(), ac: () => ac};
 const BKEYS = {ArrowLeft: ['x', -1], KeyA: ['x', -1], ArrowRight: ['x', 1], KeyD: ['x', 1], ArrowUp: ['y', -1], KeyW: ['y', -1], ArrowDown: ['y', 1], KeyS: ['y', 1]};
 addEventListener('keydown', e => {
   if (mail && mode === 'play' && (e.code === 'KeyX' || e.code === 'Enter' || e.code === 'ArrowRight')){ e.preventDefault(); if (!e.repeat) mailToss(); return; }
