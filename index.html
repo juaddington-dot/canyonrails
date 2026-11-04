@@ -1412,8 +1412,12 @@ function useBrake(){
 $('tossBtn').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audio(); mailToss(); });
 $('brakeBtn').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audio(); useBrake(); });
 function release(){ holding = false; if (fz) return; if (inBonus >= 0 && bz){ bz.drag = null; return; } if (rocket) return; const c = CUT * (cur().jump || 1) * jumpUp() * (cfg.lowG ? .75 : 1); if (mode === 'play' && train.vy < c) train.vy = c; }
-addEventListener('pointerdown', e => { if (!(e.target.closest && e.target.closest('.panel.scroll, button'))) e.preventDefault(); press(e); }, {passive:false});
-addEventListener('pointerup', release); addEventListener('pointercancel', release);
+let lastPD = 0, touchHeld = false;
+addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') lastPD = performance.now(); if (!(e.target.closest && e.target.closest('.panel.scroll, button'))) e.preventDefault(); press(e); }, {passive:false});
+addEventListener('pointerup', release); addEventListener('pointercancel', e => { if (!touchHeld) release(); });
+// fallback for embeds (e.g. iOS Safari inside an iframe) where pointer events don't arrive: use raw touches
+addEventListener('touchstart', e => { touchHeld = true; if (performance.now() - lastPD < 400) return; const t = e.target; if (!(t.closest && t.closest('.panel.scroll, button, .panel'))) e.preventDefault(); press(e.changedTouches && e.changedTouches[0] ? Object.assign({target: t, clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY}) : e); }, {passive:false});
+addEventListener('touchend', e => { touchHeld = false; release(); }); addEventListener('touchcancel', e => { touchHeld = false; release(); });
 const BKEYS = {ArrowLeft: ['x', -1], KeyA: ['x', -1], ArrowRight: ['x', 1], KeyD: ['x', 1], ArrowUp: ['y', -1], KeyW: ['y', -1], ArrowDown: ['y', 1], KeyS: ['y', 1]};
 addEventListener('keydown', e => {
   if (mail && mode === 'play' && (e.code === 'KeyX' || e.code === 'Enter' || e.code === 'ArrowRight')){ e.preventDefault(); if (!e.repeat) mailToss(); return; }
@@ -7429,10 +7433,13 @@ function bonusWin(){
   setTimeout(() => showAfterBreak('win', () => mode === 'win' && inBonus >= 0), 1700);
 }
 function bPointer(e){ const r = cv.getBoundingClientRect(); return {x: (e.clientX - r.left)/S, y: (e.clientY - r.top)/S}; }
-addEventListener('pointermove', e => {
+let lastPM = 0;
+function bDragTo(e){
   if (inBonus < 0 || !bz || !bz.drag || mode !== 'play') return;
   const p = bPointer(e); bz.tx += (p.x - bz.drag.x)*1.35; bz.ty += (p.y - bz.drag.y)*1.35; bz.drag = p;
-}, {passive: true});
+}
+addEventListener('pointermove', e => { lastPM = performance.now(); bDragTo(e); }, {passive: true});
+addEventListener('touchmove', e => { if (performance.now() - lastPM < 300 || !e.changedTouches || !e.changedTouches[0]) return; bDragTo(e.changedTouches[0]); }, {passive: true});
 
 function bSpawnHazard(f){
   const sea = bz.kind === 'sea', w = bWall(-20), mid = (w.l + w.r)/2;
