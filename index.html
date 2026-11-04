@@ -170,6 +170,7 @@ button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
       <button class="btn ghost" id="yardBtn" type="button">Train yard</button>
     </div>
     <p class="hint portrait-only">Turn your phone sideways for a bigger view.</p>
+    <button class="btn ghost" id="popBtn" type="button" hidden>Smoother controls: open full screen</button>
   </div>
 
   <div class="panel scroll" id="levels" hidden>
@@ -1463,6 +1464,14 @@ $('musicBtn').addEventListener('click', e => {
 });
 $('mute').addEventListener('click', e => { muted = !muted; $('mute').textContent = muted ? 'Sound off' : 'Sound on'; store.set('muted', muted); e.currentTarget.blur(); });
 $('playBtn').addEventListener('click', () => { audio(); startLevel(unlocked - 1); });
+// On iPhone/iPad inside an embed (itch.io), taps arrive late and can't be held. Offer to open the game as its own page.
+(function(){
+  let framed = false; try { framed = window.top !== window; } catch(e){ framed = true; }
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!(framed && ios && window.PLATFORM && window.PLATFORM.popout)) return;
+  $('popBtn').hidden = false;
+  $('popBtn').addEventListener('click', () => { const w = window.open(location.href, '_blank'); if (!w) location.href = location.href; });
+})();
 $('pickBtn').addEventListener('click', () => show('levels'));
 // hidden developer shortcut: tap the title 5 times quickly to unlock every level (and again to go back)
 let devTaps = 0, devTimer = 0, devMode = store.get('dev', false), realUnlocked = store.get('realUnlocked', unlocked);
